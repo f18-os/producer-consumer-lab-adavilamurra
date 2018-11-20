@@ -9,9 +9,9 @@ import queue
 # filename of clip to load
 fileName = 'clip.mp4'
 BUF_SIZE = 10
-#buf = [0] * BUF_SIZE
-buf = queue.Queue(BUF_SIZE)
-bufGray = queue.Queue(BUF_SIZE)
+buf = queue.Queue(BUF_SIZE) # buffer for original video
+bufGray = queue.Queue(BUF_SIZE) # buffer for grayscale video
+# create semaphores
 fill_count = threading.Semaphore(0)
 empty_count = threading.Semaphore(BUF_SIZE)
 fill_count2 = threading.Semaphore(0)
@@ -19,14 +19,11 @@ empty_count2 = threading.Semaphore(BUF_SIZE)
 
 def extractFrames():
     # Initialize frame count
-    count = front = 0
-
+    count = 0
     # open video file
     vidcap = cv2.VideoCapture(fileName)
-
     # read first image
     success,image = vidcap.read()
-
     print("Reading frame {} {} ".format(count, success))
     while success:
         jpgAsText = encodeFrame(image)
@@ -34,12 +31,11 @@ def extractFrames():
         empty_count.acquire()
         buf.put(jpgAsText)
         fill_count.release()
-        front = (front + 1) % 10
         success,image = vidcap.read()
         print('Reading frame {} {}'.format(count, success))
         count += 1
-
     print("Frame extraction complete")
+    # add end of queue string
     empty_count.acquire()
     buf.put("end")
     fill_count.release()
@@ -65,6 +61,7 @@ def convertFrames():
         fill_count2.release()
         count += 1
     print("Finished converting all frames")
+    # add end of queue string
     empty_count2.acquire()
     bufGray.put("end")
     fill_count2.release()
@@ -72,7 +69,7 @@ def convertFrames():
 
 def displayFrames():
     # initialize frame count
-    count = rear = 0
+    count = 0
     frameAsText = ""
 
     # go through each frame in the buffer until the buffer is empty
@@ -84,7 +81,6 @@ def displayFrames():
             break
         empty_count2.release()
         img = decodeFrame(frameAsText)
-        rear = (rear + 1) % 10
         print("Displaying frame {}".format(count))
         # display the image in a window called "video" and wait 42ms
         # before displaying the next frame
@@ -119,13 +115,14 @@ def encodeFrame(image):
     jpgAsText = base64.b64encode(jpgImage)
     return jpgAsText
 
-# extract the frames
+# extract the frames thread
 extractThread = threading.Thread(target=extractFrames)
-# convert the frames
+# convert the frames thread
 convertThread = threading.Thread(target=convertFrames)
-# display the frames
+# display the frames thread
 displayThread = threading.Thread(target=displayFrames)
 
+# run threads
 extractThread.start()
 convertThread.start()
 displayThread.start()
