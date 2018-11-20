@@ -12,10 +12,8 @@ BUF_SIZE = 10
 buf = queue.Queue(BUF_SIZE) # buffer for original video
 bufGray = queue.Queue(BUF_SIZE) # buffer for grayscale video
 # create semaphores
-fill_count = threading.Semaphore(0)
-empty_count = threading.Semaphore(BUF_SIZE)
-fill_count2 = threading.Semaphore(0)
-empty_count2 = threading.Semaphore(BUF_SIZE)
+sem1 = threading.Semaphore(BUF_SIZE)
+sem2 = threading.Semaphore(BUF_SIZE)
 
 def extractFrames():
     # Initialize frame count
@@ -28,17 +26,15 @@ def extractFrames():
     while success:
         jpgAsText = encodeFrame(image)
         # add the frame to the buffer
-        empty_count.acquire()
         buf.put(jpgAsText)
-        fill_count.release()
+        sem1.acquire()
         success,image = vidcap.read()
         print('Reading frame {} {}'.format(count, success))
         count += 1
     print("Frame extraction complete")
     # add end of queue string
-    empty_count.acquire()
     buf.put("end")
-    fill_count.release()
+    sem1.acquire()
 
 def convertFrames():
     # initialize frame count
@@ -47,24 +43,21 @@ def convertFrames():
     # go through each frame in the buffer until the buffer is empty
     while True:
         # get the next frame
-        fill_count.acquire()
         frameAsText = buf.get()
         if(frameAsText == "end"):
             break
-        empty_count.release()
+        sem1.release()
         img = decodeFrame(frameAsText)
         print("Converting frame {}".format(count))
         grayscaleJpgAsText = convertToGrayscaleAndEncode(img)
         # add the frame to the buffer
-        empty_count2.acquire()
         bufGray.put(grayscaleJpgAsText)
-        fill_count2.release()
+        sem2.acquire()
         count += 1
     print("Finished converting all frames")
     # add end of queue string
-    empty_count2.acquire()
     bufGray.put("end")
-    fill_count2.release()
+    sem2.acquire()
 
 
 def displayFrames():
@@ -75,11 +68,10 @@ def displayFrames():
     # go through each frame in the buffer until the buffer is empty
     while True:
         # get the next frame
-        fill_count2.acquire()
         frameAsText = bufGray.get()
         if(frameAsText == "end"):
             break
-        empty_count2.release()
+        sem2.release()
         img = decodeFrame(frameAsText)
         print("Displaying frame {}".format(count))
         # display the image in a window called "video" and wait 42ms
